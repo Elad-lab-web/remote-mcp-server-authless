@@ -45,10 +45,11 @@ function createServer(env: Env) {
         }
       );
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Gemini API error ${response.status}: ${error}`);
-      }
+  if (!response.ok) {
+  const error = await response.text();
+  console.error(`Gemini API error ${response.status}: ${error}`);
+  throw new Error(`Gemini API error ${response.status}: ${error}`);
+}
 
       const result: any = await response.json();
 
