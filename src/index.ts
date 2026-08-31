@@ -26,28 +26,33 @@ function createServer(env: Env) {
       }),
     },
     async ({ prompt, aspect_ratio }) => {
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/interactions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": env.GEMINI_API_KEY,
-          },
-          body: JSON.stringify({
-            model: "gemini-3.1-flash-image",
-            input: [{ type: "text", text: prompt }],
-            response_format: {
-              type: "image",
-              aspect_ratio: aspect_ratio || "1:1",
-            },
-          }),
-        }
-      );
+    console.log("Starting Gemini request");
+console.log("API key present:", Boolean(env.GEMINI_API_KEY));
 
-  if (!response.ok) {
+const response = await fetch(
+  "https://generativelanguage.googleapis.com/v1beta/interactions",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": env.GEMINI_API_KEY,
+    },
+    body: JSON.stringify({
+      model: "gemini-3.1-flash-image",
+      input: [{ type: "text", text: prompt }],
+      response_format: {
+        type: "image",
+        aspect_ratio: aspect_ratio || "1:1",
+      },
+    }),
+  }
+);
+
+console.log("Gemini response status:", response.status);
+
+if (!response.ok) {
   const error = await response.text();
-  console.error(`Gemini API error ${response.status}: ${error}`);
+  console.error("Gemini response body:", error);
   throw new Error(`Gemini API error ${response.status}: ${error}`);
 }
 
