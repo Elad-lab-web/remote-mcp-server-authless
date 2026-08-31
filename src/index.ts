@@ -79,7 +79,7 @@ function createServer(env: Env) {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const server = createServer(env);
-    return createMcpHandler(server)(request, env, ctx);
+    const handler = createMcpHandler(() => createServer(env));
+    return handler(request, env, ctx);
   },
 };
