@@ -110,24 +110,55 @@ function createServer(env: Env) {
       }),
     },
     async ({ prompt, image_url, aspect_ratio }) => {
-      const imageResponse = await fetch(image_url);
+     const sourceUrl = new URL(image_url);
 
-      if (!imageResponse.ok) {
-        throw new Error(
-          `Could not download source image: HTTP ${imageResponse.status}`
-        );
-      }
+let buffer: ArrayBuffer;
+let mimeType = "image/jpeg";
 
-      const mimeType =
-        imageResponse.headers.get("content-type") || "image/jpeg";
+const isUploadedImage =
+  sourceUrl.hostname ===
+    "remote-mcp-server-authless.elad-37b.workers.dev" &&
+  sourceUrl.pathname.startsWith("/image/");
 
-      if (!mimeType.startsWith("image/")) {
-        throw new Error(
-          `The supplied URL did not return an image. Content-Type: ${mimeType}`
-        );
-      }
+if (isUploadedImage) {
+  const id = sourceUrl.pathname.slice("/image/".length);
+  const key = `image:${id}`;
 
-      const buffer = await imageResponse.arrayBuffer();
+  const storedImage =
+    await env.IMAGE_STORE.getWithMetadata<ImageMetadata>(
+      key,
+      "arrayBuffer"
+    );
+
+  if (!storedImage.value) {
+    throw new Error(
+      "Source image was not found in IMAGE_STORE or has expired."
+    );
+  }
+
+  buffer = storedImage.value;
+  mimeType =
+    storedImage.metadata?.mimeType || "image/jpeg";
+} else {
+  const imageResponse = await fetch(image_url);
+
+  if (!imageResponse.ok) {
+    throw new Error(
+      `Could not download source image: HTTP ${imageResponse.status}`
+    );
+  }
+
+  mimeType =
+    imageResponse.headers.get("content-type") || "image/jpeg";
+
+  if (!mimeType.startsWith("image/")) {
+    throw new Error(
+      `The supplied URL did not return an image. Content-Type: ${mimeType}`
+    );
+  }
+
+  buffer = await imageResponse.arrayBuffer();
+}
       const bytes = new Uint8Array(buffer);
 
       let binary = "";
