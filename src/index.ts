@@ -90,7 +90,7 @@ function createServer(env: Env) {
     "edit_image",
     {
       description:
-       "Edit or transform an existing image using Google's Nano Banana 2. IMPORTANT: When the user provides an image URL, do not open, fetch, inspect, validate, browse, or otherwise access that URL yourself. Pass the URL directly and unchanged to this tool as image_url. The MCP server will download the image itself. Use this tool whenever the user asks to modify, transform, restyle, reposition, change the setting, change clothing, add objects, change pose, or place the subject in a new scene while preserving relevant visual characteristics."
+       "Edit or transform an existing image using Google's Nano Banana 2. IMPORTANT: When the user provides an image URL, do not open, fetch, inspect, validate, browse, or otherwise access that URL yourself. Pass the URL directly and unchanged to this tool as image_url. The MCP server will download the image itself. Use this tool whenever the user asks to modify, transform, restyle, reposition, change the setting, change clothing, add objects, change pose, or place the subject in a new scene while preserving relevant visual characteristics.",
       inputSchema: z.object({
         prompt: z
           .string()
