@@ -81,105 +81,127 @@ if (!response.ok) {
   );
 
   
-  server.registerTool(
-    "edit_image",
-    {
-      description:
-        "Edit or transform an existing image using Google's Nano Banana 2. Use this whenever the user provides an image and asks to modify, transform, restyle, reposition, or place the subject in a new scene while preserving relevant visual characteristics from the original image.",
-      inputSchema: z.object({
-        prompt: z
-          .string()
-          .describe(
-            "Detailed instructions describing how the source image should be edited"
-          ),
-        image_base64: z
-          .string()
-          .describe(
-            "The source image encoded as base64, without a data URL prefix"
-          ),
-        mime_type: z
-          .enum(["image/png", "image/jpeg", "image/webp"])
-          .default("image/jpeg")
-          .describe("MIME type of the source image"),
-        aspect_ratio: z
-          .enum(["1:1", "16:9", "9:16", "4:3", "3:4"])
-          .optional()
-          .describe("Optional aspect ratio for the edited output"),
-      }),
-    },
-    async ({ prompt, image_base64, mime_type, aspect_ratio }) => {
-      console.log("Starting Gemini image edit");
+server.registerTool(
+  "edit_image",
+  {
+    description:
+      "Edit or transform an existing image using Google's Nano Banana 2. Use this whenever the user provides or references an image and asks to modify, transform, restyle, reposition, or place the subject in a new scene while preserving relevant visual characteristics.",
+    inputSchema: z.object({
+      prompt: z
+        .string()
+        .describe("Detailed instructions describing how the source image should be edited"),
+      image_url: z
+        .string()
+        .url()
+        .describe("A directly accessible HTTPS URL of the source image"),
+      aspect_ratio: z
+        .enum(["1:1", "16:9", "9:16", "4:3", "3:4"])
+        .optional()
+        .describe("Optional aspect ratio for the edited output"),
+    }),
+  },
+  async ({ prompt, image_url, aspect_ratio }) => {
+    console.log("Downloading reference image");
 
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/interactions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": env.GEMINI_API_KEY,
-          },
-          body: JSON.stringify({
-            model: "gemini-3.1-flash-image",
-            input: [
-              {
-                type: "image",
-                mime_type: mime_type,
-                data: image_base64,
-              },
-              {
-                type: "text",
-                text: prompt,
-              },
-            ],
-            ...(aspect_ratio
-              ? {
-                  response_format: {
-                    type: "image",
-                    aspect_ratio: aspect_ratio,
-                  },
-                }
-              : {}),
-          }),
-        }
+    const imageResponse = await fetch(image_url);
+
+    if (!imageResponse.ok) {
+      throw new Error(
+        `Could not download source image: HTTP ${imageResponse.status}`
       );
+    }
 
-      console.log("Gemini edit response status:", response.status);
+    const mimeType =
+      imageResponse.headers.get("content-type") || "image/jpeg";
 
-      if (!response.ok) {
-        const error = await response.text();
-        console.error(
-          `Gemini edit error ${response.status}: ${error}`
-        );
-        throw new Error(
-          `Gemini edit error ${response.status}: ${error}`
-        );
+    if (!mimeType.startsWith("image/")) {
+      throw new Error(
+        `The supplied URL did not return an image. Content-Type: ${mimeType}`
+      );
+    }
+
+    const buffer = await imageResponse.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    let binary = "";
+    const chunkSize = 0x8000;
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(
+        ...bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
+      );
+    }
+
+    const imageBase64 = btoa(binary);
+
+    console.log("Starting Gemini image edit");
+
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": env.GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          model: "gemini-3.1-flash-image",
+          input: [
+            {
+              type: "image",
+              mime_type: mimeType,
+              data: imageBase64,
+            },
+            {
+              type: "text",
+              text: prompt,
+            },
+          ],
+          ...(aspect_ratio
+            ? {
+                response_format: {
+                  type: "image",
+                  aspect_ratio,
+                },
+              }
+            : {}),
+        }),
       }
+    );
 
-      const result: any = await response.json();
+    console.log("Gemini edit response status:", response.status);
 
-      for (const step of result.steps || []) {
-        if (step.type === "model_output") {
-          for (const item of step.content || []) {
-            if (item.type === "image" && item.data) {
-              return {
-                content: [
-                  {
-                    type: "image" as const,
-                    data: item.data,
-                    mimeType: item.mime_type || "image/png",
-                  },
-                ],
-              };
-            }
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(`Gemini edit error ${response.status}: ${error}`);
+      throw new Error(`Gemini edit error ${response.status}: ${error}`);
+    }
+
+    const result: any = await response.json();
+
+    for (const step of result.steps || []) {
+      if (step.type === "model_output") {
+        for (const item of step.content || []) {
+          if (item.type === "image" && item.data) {
+            return {
+              content: [
+                {
+                  type: "image" as const,
+                  data: item.data,
+                  mimeType: item.mime_type || "image/png",
+                },
+              ],
+            };
           }
         }
       }
-
-      throw new Error(
-        "Gemini completed the image edit but returned no image."
-      );
     }
-  );
+
+    throw new Error(
+      "Gemini completed the image edit but returned no image."
+    );
+  }
+);
   return server;
 }
 
